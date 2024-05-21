@@ -5,6 +5,7 @@ from fpdf import FPDF
 import streamlit as st
 import tempfile
 
+
 # Definir valores fixos
 VALOR_KWH_CEMIG = 0.956
 DESCONTO = 20
@@ -90,25 +91,29 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
     economia_formatada = "{:.2f}".format(economia)
     economia_text = economia_formatada.replace('.', ',')
     
-    font_size = 38
-    font_size2 = 25
-    font = ImageFont.truetype("arialbd.ttf", font_size)
-    font2 = ImageFont.truetype("arial.ttf", font_size2)
-    
-    draw.text((910, 1173), recebido_text, fill="black", font=font)
-    draw.text((940, 1412), valor_a_pagar_text, fill="black", font=font)
-    draw.text((297, 636), cliente_text, fill="black", font=font2)
-    draw.text((440, 672), mes_text, fill="black", font=font2)
-    draw.text((360, 707), vencimento_text, fill="black", font=font2)
-    draw.text((1060, 2212), economia_text, fill="black", font=font)
-    
+  
+    font_bold1 = ImageFont.truetype("OpenSans-Bold.ttf", size=38)
+    font_regular1 = ImageFont.truetype("OpenSans-Regular.ttf", size=25)
+
+    draw.text((910, 1168), recebido_text, fill="black", font=font_bold1)
+    draw.text((940, 1407), valor_a_pagar_text, fill="black", font=font_bold1)
+    draw.text((297, 631), cliente_text, fill="black", font=font_regular1)
+    draw.text((440, 667), mes_text, fill="black", font=font_regular1)
+    draw.text((360, 702), vencimento_text, fill="black", font=font_regular1)
+    draw.text((1060, 2207), economia_text, fill="black", font=font_bold1)
+
     # Selecionar apenas os últimos 11 meses com registro
     monthly_data01 = monthly_data.iloc[-12:]
 
     dataframe_position = (255, 1130)
-    font_size_df = 14.5
-    font_df = ImageFont.truetype("arial.ttf", font_size_df)
-    font_bold_df = ImageFont.truetype("arialbd.ttf", font_size_df)
+    #font_size_df = 14.5
+   
+   
+    font_bold_df = ImageFont.truetype("OpenSans-Bold.ttf", size=13)
+    font_bold_dff = ImageFont.truetype("OpenSans-ExtraBold.ttf", size=13)
+    font_df = ImageFont.truetype("OpenSans-Regular.ttf", size=13)
+   # font_df = "Open Sans, sans-serif, 14.5".
+  #  font_bold_df = "Montserrat, sans-serif, 14.5"
     color_light_gray = "#F0F0F0"
     color_dark_gray = "#D3D3D3"
     cell_width_df = 160
@@ -116,7 +121,7 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
     
     columns = list(monthly_data01.columns)
     for j, column_name in enumerate(columns):
-        text_width = draw.textlength(str(column_name), font=font_bold_df)
+        text_width = draw.textlength(str(column_name), font=font_bold_dff)
         text_position_x = dataframe_position[0] + j * cell_width_df + (cell_width_df - text_width) // 2
         draw.rectangle(
             [(dataframe_position[0] + j * cell_width_df, dataframe_position[1]),
@@ -151,15 +156,19 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
             draw.text(text_position, cell_text, fill="black", font=text_font)
     
     dataframe_position = (220, 868)
-    font_size_df = 18
-    font_df = ImageFont.truetype("arial.ttf", font_size_df)
-    font_bold_df = ImageFont.truetype("arialbd.ttf", font_size_df)
+    
+    
+    font_bold_df3 = ImageFont.truetype("OpenSans-Bold.ttf", size=18)
+    font_df3 = ImageFont.truetype("OpenSans-Regular.ttf", size=18)
+   # font_df3 = "Open Sans, sans-serif, 18"
+  #  font_bold_df3 = "Montserrat, sans-serif, 18"
+   
     cell_width_df = 180
     cell_height_df = 46
     
     columns = list(preprocessed_df.columns)
     for j, column_name in enumerate(columns):
-        text_width = draw.textlength(str(column_name), font=font_bold_df)
+        text_width = draw.textlength(str(column_name), font=font_bold_df3)
         text_position_x = dataframe_position[0] + j * cell_width_df + (cell_width_df - text_width) // 2
         draw.rectangle(
             [(dataframe_position[0] + j * cell_width_df, dataframe_position[1]),
@@ -167,7 +176,7 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
             fill=color_dark_gray,
             outline="black"
         )
-        draw.text((text_position_x, dataframe_position[1] + 2), str(column_name), fill="black", font=font_bold_df)
+        draw.text((text_position_x, dataframe_position[1] + 2), str(column_name), fill="black", font=font_bold_df3)
     
     for i, (_, row) in enumerate(preprocessed_df.iterrows()):
         for j, cell_value in enumerate(row):
@@ -179,8 +188,8 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
                 outline="black"
             )
             cell_text = str(cell_value)
-            text_width = draw.textlength(cell_text, font=font_df)
-            text_font = font_df
+            text_width = draw.textlength(cell_text, font=font_df3)
+            text_font = font_df3
             text_height = text_font.size
             text_position = (
                 dataframe_position[0] + j * cell_width_df + (cell_width_df - text_width) // 2,
@@ -225,9 +234,7 @@ if uploaded_file:
     economia = RECEBIDO * (VALOR_KWH_CEMIG - VALOR_KWH_FATURADO)
     ultimo_periodo = df_last_month['Período'].max()
     img = generate_image(df_last_month, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia)
-    # Gerar o PDF e exibir o link para download
-   # pdf_output = generate_pdf(img)
-   # st.download_button(label="Baixar PDF", data=pdf_output, file_name="boleto.pdf", mime="application/pdf")
+
     #Create buttons for image and PDF generation
     generate_image_button = st.button("Gerar Imagem")
     generate_pdf_button = st.button("Gerar PDF")
@@ -239,3 +246,10 @@ if uploaded_file:
         # Gerar o PDF e exibir o link para download
         pdf_output = generate_pdf(img)
         st.download_button(label="Baixar PDF", data=pdf_output, file_name="boleto.pdf", mime="application/pdf")
+
+
+
+
+
+
+
