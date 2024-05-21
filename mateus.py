@@ -90,8 +90,29 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
     economia_formatada = "{:.2f}".format(economia)
     economia_text = economia_formatada.replace('.', ',')
     
+    # Adicione um bloco de estilo CSS ao seu aplicativo Streamlit para importar a fonte Roboto
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Roboto', sans-serif;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Agora você pode usar a fonte Roboto em seu aplicativo Streamlit
     font_size = 38
     font_size2 = 25
+    font = f"Roboto, sans-serif"
+    font2 = f"Roboto, sans-serif"
+
+    
+   
+   
     font = ImageFont.truetype("arialbd.ttf", font_size)
     font2 = ImageFont.truetype("arial.ttf", font_size2)
     
@@ -241,3 +262,4 @@ if uploaded_file:
       # Gerar o PDF e exibir o link para download
        pdf_output = generate_pdf(img)
        st.download_button(label="Baixar PDF", data=pdf_output, file_name="boleto.pdf", mime="application/pdf")
+
