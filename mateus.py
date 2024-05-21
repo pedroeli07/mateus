@@ -91,33 +91,44 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
     economia_text = economia_formatada.replace('.', ',')
     
     # Adicione um bloco de estilo CSS ao seu aplicativo Streamlit para importar a fonte Roboto
+    # Adicione um bloco de estilo CSS ao seu aplicativo Streamlit para importar a fonte Roboto
     st.markdown(
         """
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-
+    
         body {
             font-family: 'Roboto', sans-serif;
+        }
+    
+        .font-normal {
+            font-family: 'Roboto', sans-serif;
+            font-weight: normal;
+        }
+    
+        .font-bold {
+            font-family: 'Roboto', sans-serif;
+            font-weight: bold;
         }
         </style>
         """,
         unsafe_allow_html=True
     )
-
+    
     # Agora você pode usar a fonte Roboto em seu aplicativo Streamlit
     font_size = 38
     font_size2 = 25
     font = f"Roboto, sans-serif"
     font2 = f"Roboto, sans-serif"
-
     
+        
     
-    draw.text((910, 1173), recebido_text, fill="black", font=font)
-    draw.text((940, 1412), valor_a_pagar_text, fill="black", font=font)
-    draw.text((297, 636), cliente_text, fill="black", font=font2)
-    draw.text((440, 672), mes_text, fill="black", font=font2)
-    draw.text((360, 707), vencimento_text, fill="black", font=font2)
-    draw.text((1060, 2212), economia_text, fill="black", font=font)
+    draw.text((910, 1173), recebido_text, fill="black", font=font + ' font-bold')
+    draw.text((940, 1412), valor_a_pagar_text, fill="black", font=font + ' font-bold')
+    draw.text((297, 636), cliente_text, fill="black", font=font2 + ' font-normal')
+    draw.text((440, 672), mes_text, fill="black", font=font2 + ' font-normal')
+    draw.text((360, 707), vencimento_text, fill="black", font=font2 + ' font-normal')
+    draw.text((1060, 2212), economia_text, fill="black", font=font + ' font-bold')
     
     # Selecionar apenas os últimos 11 meses com registro
     monthly_data01 = monthly_data.iloc[-12:]
