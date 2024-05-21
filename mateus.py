@@ -111,10 +111,6 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
     font2 = f"Roboto, sans-serif"
 
     
-   
-   
-    font = ImageFont.truetype("arialbd.ttf", font_size)
-    font2 = ImageFont.truetype("arial.ttf", font_size2)
     
     draw.text((910, 1173), recebido_text, fill="black", font=font)
     draw.text((940, 1412), valor_a_pagar_text, fill="black", font=font)
