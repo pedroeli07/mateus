@@ -4,46 +4,42 @@ from io import BytesIO
 from fpdf import FPDF
 import streamlit as st
 import tempfile
+from datetime import datetime, timedelta
 
+# Inicialize st.session_state se ainda não estiver definido
+if 'data_desejada' not in st.session_state:
+    st.session_state.data_desejada = datetime(2000, 1, 1)
+if 'numero_instalacao' not in st.session_state:
+    st.session_state.numero_instalacao = []
+    
+def process_data(df, data_desejada, numero_instalacao):
+   # df['Período'] = pd.to_datetime(df['Período'], format='%m/%y', errors='coerce')
+   #df.dropna(subset=['Período'], inplace=True)  # Drop rows with invalid dates
 
-# Definir valores fixos
-VALOR_KWH_CEMIG = 0.956
-DESCONTO = 20
-VALOR_KWH_FATURADO = 0.7648
+    # Filtrar o DataFrame com base na data e nos números de instalação fornecidos pelo usuário
+    df_filtered = df[(df['Período'] == data_desejada) & (df['Instalação'].isin(numero_instalacao))]
 
-# Função para processar os dados
-def process_data(df):
-    df['Período'] = pd.to_datetime(df['Período'], format='%m/%Y')
-    last_month = df['Período'].max()
-    df_last_month = df[df['Período'] == last_month]
-    
-    cols_to_drop = ["Quantidade Saldo a Expirar", "Período Saldo a Expirar", "Quota", 
-                    "Posto Horário", "Saldo Anterior", "Saldo Expirado", "Transferido", "Geração"]
-    df_last_month = df_last_month.drop(columns=cols_to_drop)
-    
-  #  df_last_month = df_last_month.iloc[[2, 4]]
-    df_last_month = df_last_month[df_last_month['Compensação'] != 0]
+    # Remover as colunas indesejadas
+    df_filtered = df_filtered[df_filtered['Compensação'] != 0]
 
-    df_last_month.loc[df_last_month['Instalação'] == 3013110767, 'Modalidade'] = 'GBBH - Lj 02'
-    df_last_month.loc[df_last_month['Instalação'] == 3013096188, 'Modalidade'] = 'GBBH - Lj 01'
-    
-    df_last_month['Saldo Atual'] = df_last_month['Saldo Atual'].round(2)
-    df_last_month['Período'] = df_last_month['Período'].dt.strftime('%m/%y')
-    
-    # Atualizar RECEBIDO com o valor da primeira linha da coluna "Transferido"
-    RECEBIDO = df['Transferido'].iloc[0]
+    # Mapear a modalidade com base no número de instalação
+    df_filtered.loc[df_filtered['Instalação'] == '3013110767', 'Modalidade'] = 'GBBH - Lj 02'
+    df_filtered.loc[df_filtered['Instalação'] == '3013096188', 'Modalidade'] = 'GBBH - Lj 01'
 
+    # Arredondar o saldo atual para duas casas decimais
+    df_filtered['Saldo Atual'] = df_filtered['Saldo Atual'].round(2)
     
-   # RECEBIDO = df_last_month['Recebimento'].sum()
-    VALOR_A_PAGAR = (RECEBIDO * VALOR_KWH_FATURADO).round(2)
-    
-    return df_last_month, RECEBIDO, VALOR_A_PAGAR
+    # Obtém o último período após o filtro e formata para 'mm/yy'
+    mes_periodo = df_filtered['Período'].iloc[0]
+    return df_filtered, mes_periodo
+
 
 # Função para calcular consumo e energia injetada por mês
-def calculate_consumption_generation(df):
-    df['Período'] = pd.to_datetime(df['Período'], format='%m/%Y')
-    
-    monthly_data = df.groupby('Período').agg({'Consumo': 'sum', 'Geração': lambda x: x[x != 0].sum()})
+def calculate_consumption_generation(df_copy):
+    df_copy['Período'] = pd.to_datetime(df_copy['Período'], format='%m/%Y', errors='coerce')
+    df_copy.dropna(subset=['Período'], inplace=True)  # Drop rows with invalid dates
+
+    monthly_data = df_copy.groupby('Período').agg({'Consumo': 'sum', 'Geração': lambda x: x[x != 0].sum()})
     
     months_map = {
         'Jan': 'Jan/', 'Feb': 'Fev/', 'Mar': 'Mar/', 'Apr': 'Abr/', 'May': 'Mai/', 'Jun': 'Jun/',
@@ -59,39 +55,24 @@ def calculate_consumption_generation(df):
     average_generation = monthly_data['Energia Injetada [kWh]'].mean()
     
     monthly_data.loc['Média'] = [int(average_consumption), int(average_generation)]
-    # Supondo que monthly_data seja o DataFrame que você deseja exibir na imagem
     monthly_data.reset_index(inplace=True)
 
     return monthly_data
 
-# Função para gerar a imagem com os dados processados
-def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia):
-    img = Image.open('boleto_padrao.png')
+
+def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_desejada, economia, cliente_text):
+    img = Image.open('boleto_padrao02.png')
     draw = ImageDraw.Draw(img)
     
     recebido_text = str(int(RECEBIDO))
     valor_a_pagar_text = str(VALOR_A_PAGAR)
-   
-    # Create an input field for the customer name
-    cliente_text = st.text_input("Digite o nome do cliente:", placeholder="Gracie Barra BH")
-
-   # cliente_text = "Gracie Barra BH"
-    mes_text = str(ultimo_periodo)
-    vencimento_text = "26/" + ultimo_periodo
     
-    # Calculando o desconto
-    desconto = VALOR_KWH_CEMIG - VALOR_KWH_FATURADO
-
-    # Somando a coluna "Energia Injetada [kWh]" em todas as linhas, exceto a última
-    energia_total = monthly_data.iloc[:-1]["Energia Injetada [kWh]"].sum()
-
-    # Calculando quanto o cliente economizou
-    economia = (energia_total * desconto).round(2)
+    mes_text = str(data_desejada.strftime("%m/%y"))
+    vencimento_text = "26/" + data_desejada.strftime("%m/%y")
 
     economia_formatada = "{:.2f}".format(economia)
     economia_text = economia_formatada.replace('.', ',')
     
-  
     font_bold1 = ImageFont.truetype("OpenSans-Bold.ttf", size=38)
     font_regular1 = ImageFont.truetype("OpenSans-Regular.ttf", size=25)
 
@@ -105,15 +86,14 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
     # Selecionar apenas os últimos 11 meses com registro
     monthly_data01 = monthly_data.iloc[-12:]
 
-    dataframe_position = (255, 1130)
-    #font_size_df = 14.5
-   
-   
+    dataframe_position1 = (255, 1130)
+
+    dataframe_position = (220, 868)
+    
     font_bold_df = ImageFont.truetype("OpenSans-Bold.ttf", size=13)
     font_bold_dff = ImageFont.truetype("OpenSans-ExtraBold.ttf", size=13)
     font_df = ImageFont.truetype("OpenSans-Regular.ttf", size=13)
-   # font_df = "Open Sans, sans-serif, 14.5".
-  #  font_bold_df = "Montserrat, sans-serif, 14.5"
+
     color_light_gray = "#F0F0F0"
     color_dark_gray = "#D3D3D3"
     cell_width_df = 160
@@ -122,21 +102,21 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
     columns = list(monthly_data01.columns)
     for j, column_name in enumerate(columns):
         text_width = draw.textlength(str(column_name), font=font_bold_dff)
-        text_position_x = dataframe_position[0] + j * cell_width_df + (cell_width_df - text_width) // 2
+        text_position_x = dataframe_position1[0] + j * cell_width_df + (cell_width_df - text_width) // 2
         draw.rectangle(
-            [(dataframe_position[0] + j * cell_width_df, dataframe_position[1]),
-             (dataframe_position[0] + (j + 1) * cell_width_df, dataframe_position[1] + cell_height_df)],
+            [(dataframe_position1[0] + j * cell_width_df, dataframe_position1[1]),
+             (dataframe_position1[0] + (j + 1) * cell_width_df, dataframe_position1[1] + cell_height_df)],
             fill=color_dark_gray,
             outline="black"
         )
-        draw.text((text_position_x, dataframe_position[1] + 2), str(column_name), fill="black", font=font_bold_df)
+        draw.text((text_position_x, dataframe_position1[1] + 2), str(column_name), fill="black", font=font_bold_df)
     
     for i, (_, row) in enumerate(monthly_data01.iterrows()):
         for j, cell_value in enumerate(row):
             background_color_df = color_dark_gray if i == len(monthly_data01) - 1 else color_light_gray
             draw.rectangle(
-                [(dataframe_position[0] + j * cell_width_df, dataframe_position[1] + (i + 1) * cell_height_df),
-                 (dataframe_position[0] + (j + 1) * cell_width_df, dataframe_position[1] + (i + 2) * cell_height_df)],
+                [(dataframe_position1[0] + j * cell_width_df, dataframe_position1[1] + (i + 1) * cell_height_df),
+                 (dataframe_position1[0] + (j + 1) * cell_width_df, dataframe_position1[1] + (i + 2) * cell_height_df)],
                 fill=background_color_df,
                 outline="black"
             )
@@ -150,23 +130,24 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
                 text_font = font_df
             text_height = text_font.size
             text_position = (
-                dataframe_position[0] + j * cell_width_df + (cell_width_df - text_width) // 2,
-                dataframe_position[1] + (i + 1) * cell_height_df + (cell_height_df - text_height) // 2
+                dataframe_position1[0] + j * cell_width_df + (cell_width_df - text_width) // 2,
+                dataframe_position1[1] + (i + 1) * cell_height_df + (cell_height_df - text_height) // 2
             )
             draw.text(text_position, cell_text, fill="black", font=text_font)
-    
-    dataframe_position = (220, 868)
-    
-    
+
     font_bold_df3 = ImageFont.truetype("OpenSans-Bold.ttf", size=18)
     font_df3 = ImageFont.truetype("OpenSans-Regular.ttf", size=18)
-   # font_df3 = "Open Sans, sans-serif, 18"
-  #  font_bold_df3 = "Montserrat, sans-serif, 18"
    
     cell_width_df = 180
     cell_height_df = 46
     
+    
+    preprocessed_df.drop(['Transferido', 'Geração'], axis=1, inplace=True)
+
+  
+    # Obter as colunas do preprocessed_df
     columns = list(preprocessed_df.columns)
+
     for j, column_name in enumerate(columns):
         text_width = draw.textlength(str(column_name), font=font_bold_df3)
         text_position_x = dataframe_position[0] + j * cell_width_df + (cell_width_df - text_width) // 2
@@ -176,11 +157,11 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
             fill=color_dark_gray,
             outline="black"
         )
-        draw.text((text_position_x, dataframe_position[1] + 2), str(column_name), fill="black", font=font_bold_df3)
+        draw.text((text_position_x, dataframe_position[1] + 10), str(column_name), fill="black", font=font_bold_df3)
     
     for i, (_, row) in enumerate(preprocessed_df.iterrows()):
         for j, cell_value in enumerate(row):
-            background_color_df = color_light_gray
+            background_color_df = color_light_gray if i % 2 == 0 else color_dark_gray
             draw.rectangle(
                 [(dataframe_position[0] + j * cell_width_df, dataframe_position[1] + (i + 1) * cell_height_df),
                  (dataframe_position[0] + (j + 1) * cell_width_df, dataframe_position[1] + (i + 2) * cell_height_df)],
@@ -189,17 +170,14 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultim
             )
             cell_text = str(cell_value)
             text_width = draw.textlength(cell_text, font=font_df3)
-            text_font = font_df3
-            text_height = text_font.size
+            text_height = font_df3.size
             text_position = (
                 dataframe_position[0] + j * cell_width_df + (cell_width_df - text_width) // 2,
                 dataframe_position[1] + (i + 1) * cell_height_df + (cell_height_df - text_height) // 2
             )
-            draw.text(text_position, cell_text, fill="black", font=text_font)
-    
-    return img
+            draw.text(text_position, cell_text, fill="black", font=font_df3)
 
-# Função para gerar PDF a partir da imagem
+    return img
 
 def generate_pdf(image):
     # Definir dimensões do PDF (8.28 x 11.69 inches em pontos)
@@ -222,34 +200,167 @@ def generate_pdf(image):
 
     return pdf_output
 
-# Configuração do Streamlit
-st.title('Processamento de Dados Energéticos')
+# Aplicação Streamlit
+st.title("Processamento de Dados de Energia")
 
-uploaded_file = st.file_uploader("Faça o upload do arquivo XLSX", type="xlsx")
+uploaded_file = st.file_uploader("Escolha o arquivo CSV ou XLSX", type=["csv", "xlsx"])
 
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
-    df_last_month, RECEBIDO, VALOR_A_PAGAR = process_data(df)
-    monthly_data = calculate_consumption_generation(df)
-    economia = RECEBIDO * (VALOR_KWH_CEMIG - VALOR_KWH_FATURADO)
-    ultimo_periodo = df_last_month['Período'].max()
-    img = generate_image(df_last_month, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia)
-
-    #Create buttons for image and PDF generation
-    generate_image_button = st.button("Gerar Imagem")
-    generate_pdf_button = st.button("Gerar PDF")
+if uploaded_file is not None:
+    if uploaded_file.type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+        df = pd.read_excel(uploaded_file)
+    else:
+        # Ler o arquivo CSV e forçar a coluna de instalação a ser tratada como string
+        df = pd.read_csv(uploaded_file, delimiter=";", decimal=",", encoding="latin1", dtype={"Instalação": str})
+   
     
-    if generate_image_button:
-        st.image(img, caption='Imagem Gerada', use_column_width=True)
-    if generate_pdf_button:
-        
-        # Gerar o PDF e exibir o link para download
-        pdf_output = generate_pdf(img)
-        st.download_button(label="Baixar PDF", data=pdf_output, file_name="boleto.pdf", mime="application/pdf")
+    # Remover formatação indesejada da coluna de instalação
+    df['Instalação'] = df['Instalação'].astype(str).str.replace(',', '')
+
+    # Exibir o DataFrame sem formatação automática dos números
+    st.write(df)
+           
+            # Remover as colunas indesejadas
+    cols_to_drop = ["Quantidade Saldo a Expirar", "Período Saldo a Expirar", "Quota",
+                    "Posto Horário", "Saldo Anterior", "Saldo Expirado"]
+    
+    df = df.drop(columns=cols_to_drop)
+    df_copy = df.copy()
+    df_copy2 = df.copy()
+   
+   
+    # Exibir as datas únicas disponíveis na coluna 'Período'
+    available_dates = df['Período'].unique()
+    data_desejada = st.selectbox("Selecione a data desejada:", available_dates, index=0, key="data_desejada_selectbox")
+
+    # Se a data selecionada for None, significa que nenhuma data foi selecionada ainda
+    if data_desejada is not None:
+        # Extraia o mês e o ano da data selecionada para usar nas operações
+        selected_month, selected_year = data_desejada.split('/')
+        selected_month = int(selected_month)
+        selected_year = int(selected_year)
+   
+       # Exibir as datas únicas disponíveis na coluna 'Período'
+    available_inst = df['Instalação'].unique()
+    numero_instalacao = st.multiselect("Selecione o número de instalação desejado:", available_inst, key="numero_instalacao_selectbox")
 
 
 
+    # Se a data selecionada for None, significa que nenhuma data foi selecionada ainda
+    if numero_instalacao is not None:
+        # Extraia o mês e o ano da data selecionada para usar nas operações
+        selected_ins = numero_instalacao
 
+
+    if st.button('Confirmar Período e Instalação'):
+        st.session_state.data_desejada = data_desejada
+        st.session_state.numero_instalacao = numero_instalacao
+
+        st.success('Período e número de instalação confirmados!')
+
+    if 'numero_instalacao' in st.session_state and 'data_desejada' in st.session_state :
+        st.write(f"Período Referência selecionado : {st.session_state.data_desejada}")
+        st.write(f"Número de instalação desejado: {st.session_state.numero_instalacao}")
+
+
+    VALOR_KWH_CEMIG = st.slider("Digite o valor do KWh da Cemig (R$):", min_value=0.9000, max_value=1.00, value=0.900, step=0.001, format="%.3f")
+    VALOR_KWH_CEMIG = st.number_input("Digite o valor do KWh da Cemig (R$):", min_value=0.900, max_value=1.00, value=VALOR_KWH_CEMIG, step=0.001, format="%.3f")
+
+    DESCONTO = st.slider("Digite o valor do desconto (%):", min_value=10.0, max_value=35.0, value=20.0, step=0.01, format="%.2f")
+    DESCONTO = st.number_input("Digite o valor do desconto (%):", min_value=10.0, max_value=35.0, value=DESCONTO, step=0.01, format="%.2f")
+
+    VALOR_KWH_FATURADO = st.slider("Digite o valor do KWh faturado (R$):", min_value=0.7000, max_value=0.800, value=0.700, step=0.001, format="%.3f")
+    VALOR_KWH_FATURADO = st.number_input("Digite o valor do KWh faturado (R$):", min_value=0.700, max_value=0.800, value=VALOR_KWH_FATURADO, step=0.001, format="%.3f")
+
+
+    if st.button('Confirmar Valores'):
+        st.session_state.VALOR_KWH_CEMIG = VALOR_KWH_CEMIG
+        st.session_state.DESCONTO = DESCONTO
+        st.session_state.VALOR_KWH_FATURADO = VALOR_KWH_FATURADO
+        st.success('Valores confirmados!')
+
+    if 'VALOR_KWH_CEMIG' in st.session_state and 'DESCONTO' in st.session_state and 'VALOR_KWH_FATURADO' in st.session_state:
+        st.write(f"Valor KWh Cemig confirmado: R${st.session_state.VALOR_KWH_CEMIG}")
+        st.write(f"Desconto confirmado: {st.session_state.DESCONTO}%")
+        st.write(f"Valor KWh faturado confirmado: R${st.session_state.VALOR_KWH_FATURADO}")
+        RECEBIDO = df['Transferido'].iloc[0] if not df.empty else 0
+        VALOR_A_PAGAR = (RECEBIDO * VALOR_KWH_FATURADO).round(2)
+       
+        df_last_month, ultimo_periodo = process_data(df, st.session_state.data_desejada, st.session_state.numero_instalacao)
+      
+        st.write("Dados do último mês processados:")
+        st.dataframe(df_last_month)
+
+        st.write(f"Valor Recebido: R$ {RECEBIDO}")
+        st.write(f"Valor a Pagar: R$ {VALOR_A_PAGAR}")
+
+        monthly_data = calculate_consumption_generation(df_copy)
+        st.write("Consumo e geração mensal:")
+        st.dataframe(monthly_data)
+
+        economia = RECEBIDO * (st.session_state.VALOR_KWH_CEMIG * (st.session_state.DESCONTO / 100))
+
+        cliente_text = st.text_input("Digite o nome do cliente:", placeholder="Gracie Barra BH")
+        if st.button('Confirmar Cliente'):
+            st.session_state.cliente_text = cliente_text
+            st.success('Cliente confirmado!')
+
+        # Assuming ultimo_periodo might contain extra data
+        if len(ultimo_periodo) > 5:  # Check if string length is greater than expected format
+            ultimo_periodo = ultimo_periodo[:5]  # Slice the string to remove extra characters
+            ultimo_periodo = datetime.strptime(ultimo_periodo, '%m/%y')
+                
+        # Agora você pode usar ultimo_periodo onde for necessário
+        img = generate_image(df_last_month, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia, cliente_text)
+
+        st.image(img, caption="Imagem gerada")
+
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        st.download_button(label="Baixar Imagem", data=buffer, file_name="imagem_processada.png", mime="image/png")
+
+    
+
+        # Inicializar o objeto ImageDraw para desenhar na imagem
+        draw = ImageDraw.Draw(img)
+
+        # Carregar as imagens do QR Code e do código de barras
+        qr_code_image_file = st.file_uploader("Upload Imagem QR Code", type=["png", "jpeg"])
+        barcode_image_file = st.file_uploader("Upload Imagem Código de Barras", type=["png", "jpeg"])
+
+        if qr_code_image_file and barcode_image_file:
+            qr_code_image = Image.open(qr_code_image_file)
+            barcode_image = Image.open(barcode_image_file)
+
+            # Redimensionar as imagens proporcionalmente para se ajustarem melhor ao boleto
+            proporcao_qr_code = 285 / max(qr_code_image.width, qr_code_image.height)
+            proporcao_codigo_barras = 1250 / max(barcode_image.width, barcode_image.height)
+
+            qr_code_image = qr_code_image.resize((int(qr_code_image.width * proporcao_qr_code), int(qr_code_image.height * proporcao_qr_code)))
+            barcode_image = barcode_image.resize((int(barcode_image.width * proporcao_codigo_barras), int(barcode_image.height * proporcao_codigo_barras)))
+
+            # Definir as novas posições onde os QR Code e o código de barras serão colados na imagem do boleto
+            posicao_x_qr_code = 1205
+            posicao_y_qr_code = 1200
+            posicao_x_codigo_barras = 225
+            posicao_y_codigo_barras = 1600
+
+            # Colar as imagens do QR Code e do código de barras na imagem do boleto
+            img.paste(qr_code_image, (posicao_x_qr_code, posicao_y_qr_code))
+            img.paste(barcode_image, (posicao_x_codigo_barras, posicao_y_codigo_barras))
+
+            # Salvar a imagem final com os QR Code e código de barras adicionados
+            img.save('boleto_com_qrcode01.png')
+
+            #Create buttons for image and PDF generation
+            generate_image_button = st.button("Gerar Imagem")
+            generate_pdf_button = st.button("Gerar PDF")
+
+            if generate_image_button:
+                st.image(img, caption='Imagem Gerada', use_column_width=True)
+            if generate_pdf_button:
+                # Gerar o PDF e exibir o link para download
+                pdf_output = generate_pdf(img)
+                st.download_button(label="Baixar PDF", data=pdf_output, file_name=f"{cliente_text}{VALOR_A_PAGAR}.pdf", mime="application/pdf")
 
 
 
