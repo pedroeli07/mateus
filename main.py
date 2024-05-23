@@ -11,13 +11,18 @@ if 'data_desejada' not in st.session_state:
     st.session_state.data_desejada = datetime(2000, 1, 1)
 if 'numero_instalacao' not in st.session_state:
     st.session_state.numero_instalacao = []
+#if 'RECEBIDO' not in st.session_state:
+  #  st.session_state.RECEBIDO = []
+    
+    
     
 def process_data(df, data_desejada, numero_instalacao):
-   # df['Período'] = pd.to_datetime(df['Período'], format='%m/%y', errors='coerce')
-   #df.dropna(subset=['Período'], inplace=True)  # Drop rows with invalid dates
+    # Transformar a data desejada em datetime se necessário
+    if isinstance(data_desejada, str):
+        data_desejada = datetime.strptime(data_desejada, '%m/%Y')
 
     # Filtrar o DataFrame com base na data e nos números de instalação fornecidos pelo usuário
-    df_filtered = df[(df['Período'] == data_desejada) & (df['Instalação'].isin(numero_instalacao))]
+    df_filtered = df[(df['Período'] == data_desejada.strftime('%m/%Y')) & (df['Instalação'].isin(numero_instalacao))]
 
     # Remover as colunas indesejadas
     df_filtered = df_filtered[df_filtered['Compensação'] != 0]
@@ -30,8 +35,13 @@ def process_data(df, data_desejada, numero_instalacao):
     df_filtered['Saldo Atual'] = df_filtered['Saldo Atual'].round(2)
     
     # Obtém o último período após o filtro e formata para 'mm/yy'
-    mes_periodo = df_filtered['Período'].iloc[0]
+    mes_periodo = data_desejada.strftime('%m/%Y')
+    
+    # Armazenar a última data selecionada em session_state
+    st.session_state.data_desejada = data_desejada
+
     return df_filtered, mes_periodo
+
 
 
 # Função para calcular consumo e energia injetada por mês
@@ -60,17 +70,17 @@ def calculate_consumption_generation(df_copy):
     return monthly_data
 
 
-def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_desejada, economia, cliente_text):
+def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_desejada, economia_total, cliente_text, mes_referencia, vencimento02):
     img = Image.open('boleto_padrao02.png')
     draw = ImageDraw.Draw(img)
     
-    recebido_text = str(int(RECEBIDO))
+    recebido_text = str(RECEBIDO)
     valor_a_pagar_text = str(VALOR_A_PAGAR)
-    
-    mes_text = str(data_desejada.strftime("%m/%y"))
-    vencimento_text = "26/" + data_desejada.strftime("%m/%y")
+   
+    mes_text = str(mes_referencia)
+    vencimento_text = str(vencimento02)
 
-    economia_formatada = "{:.2f}".format(economia)
+    economia_formatada = "{:.2f}".format(economia_total)
     economia_text = economia_formatada.replace('.', ',')
     
     font_bold1 = ImageFont.truetype("OpenSans-Bold.ttf", size=38)
@@ -232,46 +242,52 @@ if uploaded_file is not None:
     available_dates = df['Período'].unique()
     data_desejada = st.selectbox("Selecione a data desejada:", available_dates, index=0, key="data_desejada_selectbox")
 
-    # Se a data selecionada for None, significa que nenhuma data foi selecionada ainda
-    if data_desejada is not None:
-        # Extraia o mês e o ano da data selecionada para usar nas operações
-        selected_month, selected_year = data_desejada.split('/')
-        selected_month = int(selected_month)
-        selected_year = int(selected_year)
-   
-       # Exibir as datas únicas disponíveis na coluna 'Período'
+
+    # Extraia o mês e o ano da data selecionada para usar nas operações
+   # selected_month, selected_year = data_desejada.split('/')
+    ## selected_year = int(selected_year)
+
+    # Exibir as instalações únicas disponíveis na coluna 'Instalação'
     available_inst = df['Instalação'].unique()
     numero_instalacao = st.multiselect("Selecione o número de instalação desejado:", available_inst, key="numero_instalacao_selectbox")
 
+    if numero_instalacao and data_desejada is not None:
+        # Filter the DataFrame by date and installation number
+        df_filtered2 = df[(df['Período'] == data_desejada) & (df['Instalação'].isin(numero_instalacao))]
+
+        # Check if there are any filtered rows
+        if not df_filtered2.empty:
+            # Exclude rows where 'Geração' is different from 0
+            df_filtered2 = df_filtered2[df_filtered2['Geração'] != 0]
+
+            # Obtain the 'Geração' value from the filtered DataFrame
+            RECEBIDO = int(df_filtered2['Geração'].values)
+
+        if st.button('Confirmar Período e Instalação'):
+            st.session_state.data_desejada = data_desejada
+            st.session_state.numero_instalacao = numero_instalacao
 
 
-    # Se a data selecionada for None, significa que nenhuma data foi selecionada ainda
-    if numero_instalacao is not None:
-        # Extraia o mês e o ano da data selecionada para usar nas operações
-        selected_ins = numero_instalacao
+            st.success('Período e número de instalação confirmados!')
+        st.dataframe(df_filtered2)
+    
+        if 'numero_instalacao' in st.session_state and 'data_desejada' in st.session_state:
+            st.write(f"Período Referência selecionado: {st.session_state.data_desejada}")
+            st.write(f"Números de instalação desejados: {st.session_state.numero_instalacao}")
+            st.write(f"Valor recebido: R$ {RECEBIDO}")
 
 
-    if st.button('Confirmar Período e Instalação'):
-        st.session_state.data_desejada = data_desejada
-        st.session_state.numero_instalacao = numero_instalacao
-
-        st.success('Período e número de instalação confirmados!')
-
-    if 'numero_instalacao' in st.session_state and 'data_desejada' in st.session_state :
-        st.write(f"Período Referência selecionado : {st.session_state.data_desejada}")
-        st.write(f"Número de instalação desejado: {st.session_state.numero_instalacao}")
-
-
-    VALOR_KWH_CEMIG = st.slider("Digite o valor do KWh da Cemig (R$):", min_value=0.9000, max_value=1.00, value=0.900, step=0.001, format="%.3f")
+    VALOR_KWH_CEMIG = st.slider("Digite o valor do KWh da Cemig (R$):", min_value=0.7000, max_value=2.00, value=0.956, step=0.001, format="%.3f")
     VALOR_KWH_CEMIG = st.number_input("Digite o valor do KWh da Cemig (R$):", min_value=0.900, max_value=1.00, value=VALOR_KWH_CEMIG, step=0.001, format="%.3f")
 
-    DESCONTO = st.slider("Digite o valor do desconto (%):", min_value=10.0, max_value=35.0, value=20.0, step=0.01, format="%.2f")
+    DESCONTO = st.slider("Digite o valor do desconto (%):", min_value=0.0, max_value=50.0, value=20.0, step=0.01, format="%.2f")
     DESCONTO = st.number_input("Digite o valor do desconto (%):", min_value=10.0, max_value=35.0, value=DESCONTO, step=0.01, format="%.2f")
 
-    VALOR_KWH_FATURADO = st.slider("Digite o valor do KWh faturado (R$):", min_value=0.7000, max_value=0.800, value=0.700, step=0.001, format="%.3f")
-    VALOR_KWH_FATURADO = st.number_input("Digite o valor do KWh faturado (R$):", min_value=0.700, max_value=0.800, value=VALOR_KWH_FATURADO, step=0.001, format="%.3f")
-
-
+    # Definir o valor do kWh faturado como o valor do kWh da Cemig menos o desconto
+    VALOR_KWH_FATURADO = VALOR_KWH_CEMIG - ((VALOR_KWH_CEMIG * DESCONTO) / 100)
+    # Arredondar o valor do kWh faturado para três casas decimais
+    VALOR_KWH_FATURADO = round(VALOR_KWH_FATURADO, 3)
+   
     if st.button('Confirmar Valores'):
         st.session_state.VALOR_KWH_CEMIG = VALOR_KWH_CEMIG
         st.session_state.DESCONTO = DESCONTO
@@ -281,28 +297,81 @@ if uploaded_file is not None:
     if 'VALOR_KWH_CEMIG' in st.session_state and 'DESCONTO' in st.session_state and 'VALOR_KWH_FATURADO' in st.session_state:
         st.write(f"Valor KWh Cemig confirmado: R${st.session_state.VALOR_KWH_CEMIG}")
         st.write(f"Desconto confirmado: {st.session_state.DESCONTO}%")
-        st.write(f"Valor KWh faturado confirmado: R${st.session_state.VALOR_KWH_FATURADO}")
-        RECEBIDO = df['Transferido'].iloc[0] if not df.empty else 0
-        VALOR_A_PAGAR = (RECEBIDO * VALOR_KWH_FATURADO).round(2)
+        st.write(f"Valor KWh faturado confirmado: R${st.session_state.VALOR_KWH_FATURADO}")   
+
+        VALOR_A_PAGAR = RECEBIDO * VALOR_KWH_FATURADO
+       
+        # Arredondar o VALOR_A_PAGAR para três casas decimais
+        VALOR_A_PAGAR = round(VALOR_A_PAGAR, 2)
        
         df_last_month, ultimo_periodo = process_data(df, st.session_state.data_desejada, st.session_state.numero_instalacao)
       
         st.write("Dados do último mês processados:")
         st.dataframe(df_last_month)
 
-        st.write(f"Valor Recebido: R$ {RECEBIDO}")
+        st.write(f"Recebido: {(RECEBIDO)} kWH ")
         st.write(f"Valor a Pagar: R$ {VALOR_A_PAGAR}")
 
         monthly_data = calculate_consumption_generation(df_copy)
         st.write("Consumo e geração mensal:")
         st.dataframe(monthly_data)
 
-        economia = RECEBIDO * (st.session_state.VALOR_KWH_CEMIG * (st.session_state.DESCONTO / 100))
+       # economia = (RECEBIDO) * (st.session_state.VALOR_KWH_CEMIG * (st.session_state.DESCONTO / 100))
+        def calculate_total_savings(df_copy, valor_kwh_cemig, desconto):
+            # Inicializar o total de economia
+            total_economia = 0
+            
+            # Iterar sobre cada mês no DataFrame
+            for periodo in df_copy['Período'].unique():
+                # Filtrar o DataFrame para o mês atual
+                df_mes = df_copy[df_copy['Período'] == periodo]
+                
+                # Calcular o valor recebido para o mês atual
+                valor_recebido_mes = df_mes['Geração'].sum()
+                
+                # Calcular a economia para o mês atual
+                economia_mes = valor_recebido_mes * (valor_kwh_cemig * (desconto / 100))
+                
+                # Adicionar a economia do mês atual ao total de economia
+                total_economia += economia_mes
+            
+            return total_economia
 
-        cliente_text = st.text_input("Digite o nome do cliente:", placeholder="Gracie Barra BH")
+        # Calcular a economia total
+        economia_total = calculate_total_savings(df_copy, st.session_state.VALOR_KWH_CEMIG, st.session_state.DESCONTO)
+
+        # Lista predefinida de nomes de clientes
+        nomes_clientes = ['Gracie Barra BH', 'Mateus Menezes']
+
+        # Componente selectbox para selecionar ou digitar o nome do cliente
+        cliente_selecionado = st.selectbox("Selecione ou digite o nome do cliente:", nomes_clientes + ['Outro'])
+
+        # Se o usuário selecionar "Outro", exibir um campo de entrada de texto para digitar o nome do cliente
+        if cliente_selecionado == 'Outro':
+            cliente_text = st.text_input("Digite o nome do cliente:", value="", placeholder="Digite o nome do cliente aqui")
+        else:
+            cliente_text = cliente_selecionado
+
+        # Botão para confirmar o cliente
         if st.button('Confirmar Cliente'):
             st.session_state.cliente_text = cliente_text
             st.success('Cliente confirmado!')
+        
+        # Definir a data atual como padrão
+        data_atual = datetime.now()
+
+        # Adicionar componente de seleção de data
+        data_desejada02 = st.date_input("Selecione a data desejada:", value=data_atual)
+      
+        # Botão para confirmar o cliente
+        if st.button('Confirmar Data de Upload'):
+            st.session_state.data_desejada02 = data_desejada02
+            st.success('Cliente confirmado!')
+        # Obter o mês e o ano da data selecionada
+        mes_referencia = data_desejada02.strftime("%m/%Y")
+
+        # Definir o vencimento como 7 dias após a data selecionada
+        vencimento02 = (data_desejada02 + timedelta(days=7)).strftime("%d/%m/%Y")
 
         # Assuming ultimo_periodo might contain extra data
         if len(ultimo_periodo) > 5:  # Check if string length is greater than expected format
@@ -310,7 +379,7 @@ if uploaded_file is not None:
             ultimo_periodo = datetime.strptime(ultimo_periodo, '%m/%y')
                 
         # Agora você pode usar ultimo_periodo onde for necessário
-        img = generate_image(df_last_month, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia, cliente_text)
+        img = generate_image(df_last_month, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia_total, cliente_text, mes_referencia, vencimento02)
 
         st.image(img, caption="Imagem gerada")
 
@@ -361,6 +430,4 @@ if uploaded_file is not None:
                 # Gerar o PDF e exibir o link para download
                 pdf_output = generate_pdf(img)
                 st.download_button(label="Baixar PDF", data=pdf_output, file_name=f"{cliente_text}{VALOR_A_PAGAR}.pdf", mime="application/pdf")
-
-
 
