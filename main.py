@@ -88,7 +88,7 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_
     carbono_text = f"{carbono_inteiro} Kg"
     
     font_bold11 = ImageFont.truetype("OpenSans-Bold.ttf", size=40)
-    draw.text((975, 2077), carbono_text, fill="black", font=font_bold11)
+    draw.text((975, 2110), carbono_text, fill="black", font=font_bold11)
     
     font_bold1 = ImageFont.truetype("OpenSans-Bold.ttf", size=38)
     font_regular1 = ImageFont.truetype("OpenSans-Regular.ttf", size=25)
@@ -98,7 +98,7 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_
     draw.text((297, 631), cliente_text, fill="black", font=font_regular1)
     draw.text((440, 667), mes_text, fill="black", font=font_regular1)
     draw.text((360, 702), vencimento_text, fill="black", font=font_regular1)
-    draw.text((1060, 2207), economia_text, fill="black", font=font_bold1)
+    draw.text((1065, 2240), economia_text, fill="black", font=font_bold1)
 
     font_bold12 = ImageFont.truetype("OpenSans-Bold.ttf", size=49)
     KWH_CEMIG_text = str(VALOR_KWH_CEMIG)
@@ -469,5 +469,3 @@ if uploaded_file is not None:
                 # Gerar o PDF e exibir o link para download
                 pdf_output = generate_pdf(img)
                 st.download_button(label="Baixar PDF", data=pdf_output, file_name=f"{cliente_text}{VALOR_A_PAGAR}.pdf", mime="application/pdf")
-
-
