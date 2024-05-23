@@ -70,8 +70,8 @@ def calculate_consumption_generation(df_copy):
     return monthly_data
 
 
-def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_desejada, economia_total, cliente_text, mes_referencia, vencimento02):
-    img = Image.open('boleto_padrao02.png')
+def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_desejada, economia_total, carbono_economia,  cliente_text, mes_referencia, vencimento02):
+    img = Image.open('boleto_padrao04.png')
     draw = ImageDraw.Draw(img)
     
     recebido_text = str(RECEBIDO)
@@ -83,6 +83,13 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_
     economia_formatada = "{:.2f}".format(economia_total)
     economia_text = economia_formatada.replace('.', ',')
     
+    carbono_inteiro = int(carbono_economia)
+    #carbono_text = str(carbono_inteiro) + "Kg"
+    carbono_text = f"{carbono_inteiro} Kg"
+    
+    font_bold11 = ImageFont.truetype("OpenSans-Bold.ttf", size=40)
+    draw.text((975, 2077), carbono_text, fill="black", font=font_bold11)
+    
     font_bold1 = ImageFont.truetype("OpenSans-Bold.ttf", size=38)
     font_regular1 = ImageFont.truetype("OpenSans-Regular.ttf", size=25)
 
@@ -93,6 +100,28 @@ def generate_image(preprocessed_df, monthly_data, RECEBIDO, VALOR_A_PAGAR, data_
     draw.text((360, 702), vencimento_text, fill="black", font=font_regular1)
     draw.text((1060, 2207), economia_text, fill="black", font=font_bold1)
 
+    font_bold12 = ImageFont.truetype("OpenSans-Bold.ttf", size=49)
+    KWH_CEMIG_text = str(VALOR_KWH_CEMIG)
+   
+    DESCONTO_inteiro = int(DESCONTO)
+    DESCONTO_text = str(DESCONTO_inteiro)
+   
+    KWH_FATURADO_text = str(VALOR_KWH_FATURADO)
+    
+    # Verificar o comprimento do texto do desconto
+    if len(DESCONTO_text) > 2:
+        # Se o desconto tiver mais de 2 dígitos, ajuste a coordenada x
+        draw.text((970, 663), DESCONTO_text, fill="black", font=font_bold12)
+    elif len(DESCONTO_text) < 2:
+        # Se o desconto tiver mais de 2 dígitos, ajuste a coordenada x
+        draw.text((1015, 663), DESCONTO_text, fill="black", font=font_bold12)
+    else:
+        draw.text((990, 663), DESCONTO_text, fill="black", font=font_bold12)
+
+    draw.text((740, 663), KWH_CEMIG_text , fill="black", font=font_bold12)
+    draw.text((1310, 663),  KWH_FATURADO_text, fill="black", font=font_bold12)
+
+   # draw.text((990, 663), KWH_CEMIG_text , fill="black", font=font_bold12)
     # Selecionar apenas os últimos 11 meses com registro
     monthly_data01 = monthly_data.iloc[-12:]
 
@@ -277,69 +306,79 @@ if uploaded_file is not None:
             st.write(f"Valor recebido: R$ {RECEBIDO}")
 
 
-    VALOR_KWH_CEMIG = st.slider("Digite o valor do KWh da Cemig (R$):", min_value=0.7000, max_value=2.00, value=0.956, step=0.001, format="%.3f")
-    VALOR_KWH_CEMIG = st.number_input("Digite o valor do KWh da Cemig (R$):", min_value=0.900, max_value=1.00, value=VALOR_KWH_CEMIG, step=0.001, format="%.3f")
+        if 'data_desejada' in st.session_state and 'numero_instalacao' in st.session_state:
+            VALOR_KWH_CEMIG = st.slider("Digite o valor do KWh da Cemig (R$):", min_value=0.1000, max_value=2.00, value=0.956, step=0.001, format="%.3f")
+            VALOR_KWH_CEMIG = st.number_input("Digite o valor do KWh da Cemig (R$):", min_value=0.1000, max_value=2.00, value=VALOR_KWH_CEMIG, step=0.001, format="%.3f")
 
-    DESCONTO = st.slider("Digite o valor do desconto (%):", min_value=0.0, max_value=50.0, value=20.0, step=0.01, format="%.2f")
-    DESCONTO = st.number_input("Digite o valor do desconto (%):", min_value=10.0, max_value=35.0, value=DESCONTO, step=0.01, format="%.2f")
+            DESCONTO = st.slider("Digite o valor do desconto (%):", min_value=0, max_value=100, value=20, step=1)#, format="%.2f")
+            DESCONTO = st.number_input("Digite o valor do desconto (%):", min_value=0, max_value=100, value=DESCONTO, step=1)#, format="%.2f")
 
-    # Definir o valor do kWh faturado como o valor do kWh da Cemig menos o desconto
-    VALOR_KWH_FATURADO = VALOR_KWH_CEMIG - ((VALOR_KWH_CEMIG * DESCONTO) / 100)
-    # Arredondar o valor do kWh faturado para três casas decimais
-    VALOR_KWH_FATURADO = round(VALOR_KWH_FATURADO, 3)
-   
-    if st.button('Confirmar Valores'):
-        st.session_state.VALOR_KWH_CEMIG = VALOR_KWH_CEMIG
-        st.session_state.DESCONTO = DESCONTO
-        st.session_state.VALOR_KWH_FATURADO = VALOR_KWH_FATURADO
-        st.success('Valores confirmados!')
+            if st.button('Confirmar Valores'):
+                VALOR_KWH_CEMIG = VALOR_KWH_CEMIG
+                DESCONTO = DESCONTO
 
-    if 'VALOR_KWH_CEMIG' in st.session_state and 'DESCONTO' in st.session_state and 'VALOR_KWH_FATURADO' in st.session_state:
-        st.write(f"Valor KWh Cemig confirmado: R${st.session_state.VALOR_KWH_CEMIG}")
-        st.write(f"Desconto confirmado: {st.session_state.DESCONTO}%")
-        st.write(f"Valor KWh faturado confirmado: R${st.session_state.VALOR_KWH_FATURADO}")   
+            # Calcular o valor do kWh faturado como o valor do kWh da Cemig menos o desconto
+            VALOR_KWH_FATURADO = VALOR_KWH_CEMIG - ((VALOR_KWH_CEMIG * DESCONTO) / 100)
+            # Arredondar o valor do kWh faturado para três casas decimais
+            VALOR_KWH_FATURADO = round(VALOR_KWH_FATURADO, 3)
 
-        VALOR_A_PAGAR = RECEBIDO * VALOR_KWH_FATURADO
-       
-        # Arredondar o VALOR_A_PAGAR para três casas decimais
-        VALOR_A_PAGAR = round(VALOR_A_PAGAR, 2)
-       
-        df_last_month, ultimo_periodo = process_data(df, st.session_state.data_desejada, st.session_state.numero_instalacao)
-      
-        st.write("Dados do último mês processados:")
-        st.dataframe(df_last_month)
+            VALOR_KWH_FATURADO = VALOR_KWH_FATURADO
+            st.success('Valores confirmados!')
 
-        st.write(f"Recebido: {(RECEBIDO)} kWH ")
-        st.write(f"Valor a Pagar: R$ {VALOR_A_PAGAR}")
+    # if 'VALOR_KWH_CEMIG' in st.session_state and 'DESCONTO' in st.session_state and 'VALOR_KWH_FATURADO' in st.session_state:
+            st.write(f"Valor KWh Cemig confirmado: R${VALOR_KWH_CEMIG}")
+            st.write(f"Desconto confirmado: {DESCONTO}%")
+            st.write(f"Valor KWh faturado confirmado: R${VALOR_KWH_FATURADO}")
 
-        monthly_data = calculate_consumption_generation(df_copy)
-        st.write("Consumo e geração mensal:")
-        st.dataframe(monthly_data)
+            VALOR_A_PAGAR = RECEBIDO * VALOR_KWH_FATURADO
+        
+            # Arredondar o VALOR_A_PAGAR para três casas decimais
+            VALOR_A_PAGAR = round(VALOR_A_PAGAR, 2)
+            
+            df_last_month, ultimo_periodo = process_data(df, st.session_state.data_desejada, st.session_state.numero_instalacao)
+        
+            st.write("Dados do último mês processados:")
+            st.dataframe(df_last_month)
 
-       # economia = (RECEBIDO) * (st.session_state.VALOR_KWH_CEMIG * (st.session_state.DESCONTO / 100))
-        def calculate_total_savings(df_copy, valor_kwh_cemig, desconto):
-            # Inicializar o total de economia
+            st.write(f"Recebido: {(RECEBIDO)} kWH ")
+            st.write(f"Valor a Pagar: R$ {VALOR_A_PAGAR}")
+
+            monthly_data = calculate_consumption_generation(df_copy)
+            st.write("Consumo e geração mensal:")
+            st.dataframe(monthly_data)
+
+        def calculate_total_savings_and_carbon_emissions(df_copy, valor_kwh_cemig, desconto, data_desejada):
+            # Inicializar o total de economia e o total de emissões de carbono evitadas
             total_economia = 0
+            total_emissoes_evitadas = 0
+            
+            # Filtrar o DataFrame para conter apenas dados até a data desejada
+            df_copy = df_copy[df_copy['Período'] <= data_desejada]
             
             # Iterar sobre cada mês no DataFrame
             for periodo in df_copy['Período'].unique():
-                # Filtrar o DataFrame para o mês atual
-                df_mes = df_copy[df_copy['Período'] == periodo]
-                
                 # Calcular o valor recebido para o mês atual
-                valor_recebido_mes = df_mes['Geração'].sum()
+                valor_recebido_mes = df_copy[df_copy['Período'] == periodo]['Geração'].sum()
                 
                 # Calcular a economia para o mês atual
                 economia_mes = valor_recebido_mes * (valor_kwh_cemig * (desconto / 100))
                 
                 # Adicionar a economia do mês atual ao total de economia
                 total_economia += economia_mes
+                
+                # Calcular as emissões de carbono evitadas para o mês atual
+                emissao_carbono_mes = 0.4 * valor_recebido_mes
+                
+                # Adicionar as emissões de carbono evitadas do mês atual ao total
+                total_emissoes_evitadas += emissao_carbono_mes
             
-            return total_economia
+            return total_economia, total_emissoes_evitadas
 
-        # Calcular a economia total
-        economia_total = calculate_total_savings(df_copy, st.session_state.VALOR_KWH_CEMIG, st.session_state.DESCONTO)
 
+        # Calcular a economia total e as emissões de carbono evitadas até a data desejada
+        economia_total, carbono_economia = calculate_total_savings_and_carbon_emissions(df_copy, VALOR_KWH_CEMIG, DESCONTO, data_desejada)
+
+        
         # Lista predefinida de nomes de clientes
         nomes_clientes = ['Gracie Barra BH', 'Mateus Menezes']
 
@@ -379,7 +418,7 @@ if uploaded_file is not None:
             ultimo_periodo = datetime.strptime(ultimo_periodo, '%m/%y')
                 
         # Agora você pode usar ultimo_periodo onde for necessário
-        img = generate_image(df_last_month, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia_total, cliente_text, mes_referencia, vencimento02)
+        img = generate_image(df_last_month, monthly_data, RECEBIDO, VALOR_A_PAGAR, ultimo_periodo, economia_total, carbono_economia,  cliente_text, mes_referencia, vencimento02)
 
         st.image(img, caption="Imagem gerada")
 
@@ -430,4 +469,5 @@ if uploaded_file is not None:
                 # Gerar o PDF e exibir o link para download
                 pdf_output = generate_pdf(img)
                 st.download_button(label="Baixar PDF", data=pdf_output, file_name=f"{cliente_text}{VALOR_A_PAGAR}.pdf", mime="application/pdf")
+
 
