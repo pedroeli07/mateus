@@ -303,7 +303,7 @@ if uploaded_file is not None:
         if 'numero_instalacao' in st.session_state and 'data_desejada' in st.session_state:
             st.write(f"Período Referência selecionado: {st.session_state.data_desejada}")
             st.write(f"Números de instalação desejados: {st.session_state.numero_instalacao}")
-            st.write(f"Valor recebido: R$ {RECEBIDO}")
+            st.write(f"RECEBIDO: {RECEBIDO} kWh")
 
 
         if 'data_desejada' in st.session_state and 'numero_instalacao' in st.session_state:
